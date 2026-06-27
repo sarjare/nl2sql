@@ -20,26 +20,24 @@ class MetadataLoader:
         # -----------------------------
         # STEP 1 : Read all columns
         # -----------------------------
+      
         column_query = """
         SELECT
             table_name,
             column_name,
             data_type,
             nullable
-        FROM all_tab_columns
-        WHERE owner = :owner
-        AND table_name IN (
+        FROM user_tab_columns   
+        WHERE table_name IN (
             'TRANSMAIN_POC',
             'PORTFOLIOS_POC',
             'SECURITIES_POC'
         )
         ORDER BY table_name, column_id
         """
-
-        columns = self.db.execute(
-            column_query,
-            {"owner": DB_CONFIG["working_schema"]}
-        )
+        columns = self.db.execute(column_query)
+        print("Columns:", len(columns))
+        print(columns[:5])
 
         # -----------------------------
         # STEP 2 : Read comments
