@@ -3,9 +3,9 @@ import re
 
 class QueryParser:
 
-    def __init__(self, metadata):
+    def __init__(self, metadata_index):
 
-        self.metadata = metadata
+        self.metadata_index = metadata_index
 
         self.aggregations = {
             "sum": "SUM",
@@ -20,21 +20,48 @@ class QueryParser:
         }
 
         self.operators = {
-            "greater": ">",
-            "more": ">",
+            "greater than": ">",
+            "more than": ">",
             "above": ">",
-            "less": "<",
+            "less than": "<",
             "below": "<",
             "under": "<",
-            "equal": "=",
-            "equals": "="
+            "equal to": "=",
+            "equals": "=",
+            "=": "=",
+            ">": ">",
+            "<": "<"
+        }
+
+        self.months = {
+            "january": 1,
+            "february": 2,
+            "march": 3,
+            "april": 4,
+            "may": 5,
+            "june": 6,
+            "july": 7,
+            "august": 8,
+            "september": 9,
+            "october": 10,
+            "november": 11,
+            "december": 12,
+            "jan": 1,
+            "feb": 2,
+            "mar": 3,
+            "apr": 4,
+            "jun": 6,
+            "jul": 7,
+            "aug": 8,
+            "sep": 9,
+            "oct": 10,
+            "nov": 11,
+            "dec": 12
         }
 
     def parse(self, question):
 
         question = question.lower()
-
-        words = re.findall(r"\w+", question)
 
         query = {
             "tables": [],
@@ -46,92 +73,76 @@ class QueryParser:
             "limit": None
         }
 
-        # -----------------------------
+        # -------------------------
+        # Search metadata index
+        # -------------------------
+
+        matches = self.metadata_index.search(question)
+
+        seen_tables = set()
+        seen_columns = set()
+
+        for item in matches:
+
+            if item["table"] not in seen_tables:
+                query["tables"].append(item["table"])
+                seen_tables.add(item["table"])
+
+            if item["column"] and item["column"] not in seen_columns:
+                query["columns"].append(item["column"])
+                seen_columns.add(item["column"])
+
+        # -------------------------
         # Aggregation
-        # -----------------------------
+        # -------------------------
 
-        for word in words:
-            if word in self.aggregations:
-                query["aggregation"] = self.aggregations[word]
+        for word, sql in self.aggregations.items():
+
+            if word in question:
+
+                query["aggregation"] = sql
                 break
 
-        # -----------------------------
-        # Detect operator
-        # -----------------------------
+        # -------------------------
+        # Top N
+        # -------------------------
 
-        operator = None
+        top = re.search(r"top\s+(\d+)", question)
 
-        for word in words:
-            if word in self.operators:
-                operator = self.operators[word]
-                break
+        if top:
 
-        # -----------------------------
-        # Detect numeric value
-        # -----------------------------
+            query["limit"] = int(top.group(1))
+
+            query["order_by"] = {
+                "direction": "DESC"
+            }
+
+        # -------------------------
+        # Numbers
+        # -------------------------
+
+        number = re.search(r"\d+", question)
 
         value = None
 
-        for word in words:
-            if word.isdigit():
-                value = int(word)
+        if number:
+
+            value = int(number.group())
+
+        # -------------------------
+        # Operators
+        # -------------------------
+
+        operator = None
+
+        for text, symbol in self.operators.items():
+
+            if text in question:
+
+                operator = symbol
                 break
 
-        # -----------------------------
-        # Match columns using comments
-        # -----------------------------
-
-        matched_tables = set()
-        matched_columns = []
-
-        for table in self.metadata:
-
-            for column in self.metadata[table]["columns"]:
-
-                comment = self.metadata[table]["columns"][column]["comment"]
-
-                if not comment:
-                    continue
-
-                keywords = re.findall(r"\w+", comment.lower())
-
-                score = 0
-
-                for word in words:
-                    if word in keywords:
-                        score += 1
-
-                if score > 0:
-
-                    matched_tables.add(table)
-
-                    matched_columns.append({
-                        "table": table,
-                        "column": column,
-                        "score": score
-                    })
-
-        matched_columns.sort(
-            key=lambda x: x["score"],
-            reverse=True
-        )
-
-        seen = set()
-
-        for item in matched_columns:
-
-            if item["column"] not in seen:
-
-                query["columns"].append(item["column"])
-                seen.add(item["column"])
-
-        query["tables"] = list(matched_tables)
-
-        # -----------------------------
-        # Create filter
-        # -----------------------------
-
-        if operator and value is not None and query["columns"]:
+        if operator and value and query["columns"]:
 
             query["filters"].append({
 

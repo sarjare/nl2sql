@@ -1,22 +1,25 @@
+from pprint import pprint
+
 from config import DB_CONFIG
 from database import OracleDatabase
 from metadata_loader import MetadataLoader
+from metadata_index import MetadataIndex
 from parser import QueryParser
 
 db = OracleDatabase(DB_CONFIG)
 
 db.connect()
 
-loader = MetadataLoader(db)
+metadata = MetadataLoader(db).load_metadata()
 
-metadata = loader.load_metadata()
+index = MetadataIndex(metadata)
 
-parser = QueryParser(metadata)
+index.build()
 
-question = input("Ask: ")
+parser = QueryParser(index)
 
-query = parser.parse(question)
+while True:
 
-print(query)
+    question = input("Ask : ")
 
-db.disconnect()
+    pprint(parser.parse(question))
