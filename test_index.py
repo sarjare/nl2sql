@@ -11,15 +11,12 @@ db.connect()
 
 metadata = MetadataLoader(db).load_metadata()
 
-index = MetadataIndex(metadata).build()
+index = MetadataIndex(metadata)
 
-db.disconnect()
+index.build()
 
 while True:
 
-    word = input("Search : ").lower()
+    question = input("Ask : ")
 
-    if word == "exit":
-        break
-
-    pprint(index.get(word))
+    pprint(index.search(question))

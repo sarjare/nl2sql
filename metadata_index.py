@@ -1,4 +1,5 @@
 import re
+from collections import defaultdict
 
 
 class MetadataIndex:
@@ -7,16 +8,25 @@ class MetadataIndex:
 
         self.metadata = metadata
 
-        self.index = {}
+        self.index = defaultdict(list)
 
-        self.stop_words = {"the", "of","for","to","a","an","is", "are","per","by", "in","on","at","and","or"}
+        self.stop_words = {
+            "the", "of", "for", "to", "a", "an",
+            "is", "are", "per", "by", "in",
+            "on", "at", "and", "or", "show"
+        }
+
+    # ----------------------------------------
+    # Build Index
+    # ----------------------------------------
+
     def build(self):
 
         for table in self.metadata:
 
-            # --------------------------
-            # Index Table Name
-            # --------------------------
+            # -------------------------
+            # Table Name
+            # -------------------------
 
             table_words = re.findall(r"\w+", table.lower())
 
@@ -25,37 +35,24 @@ class MetadataIndex:
                 if word in self.stop_words:
                     continue
 
-                self._add(
-                    word,
-                    table,
-                    None,
-                    "table"
-                )
+                self._add(word, table, None, "table")
 
-            # --------------------------
-            # Index Columns
-            # --------------------------
+            # -------------------------
+            # Columns
+            # -------------------------
 
             for column in self.metadata[table]["columns"]:
 
                 # Column Name
 
-                column_words = re.findall(
-                    r"\w+",
-                    column.lower()
-                )
+                column_words = re.findall(r"\w+", column.lower())
 
                 for word in column_words:
 
                     if word in self.stop_words:
                         continue
 
-                    self._add(
-                        word,
-                        table,
-                        column,
-                        "column"
-                    )
+                    self._add(word, table, column, "column")
 
                 # Column Comment
 
@@ -73,20 +70,15 @@ class MetadataIndex:
                         if word in self.stop_words:
                             continue
 
-                        self._add(
-                            word,
-                            table,
-                            column,
-                            "comment"
-                        )
+                        self._add(word, table, column, "comment")
 
         return self.index
 
+    # ----------------------------------------
+    # Add keyword
+    # ----------------------------------------
+
     def _add(self, keyword, table, column, source):
-
-        if keyword not in self.index:
-
-            self.index[keyword] = []
 
         self.index[keyword].append({
 
@@ -97,3 +89,44 @@ class MetadataIndex:
             "source": source
 
         })
+
+    # ----------------------------------------
+    # Search
+    # ----------------------------------------
+
+    def search(self, question):
+
+        words = re.findall(r"\w+", question.lower())
+
+        scores = {}
+
+        for word in words:
+
+            if word in self.stop_words:
+                continue
+
+            if word not in self.index:
+                continue
+
+            for item in self.index[word]:
+
+                key = (item["table"], item["column"])
+
+                if key not in scores:
+
+                    scores[key] = {
+                        "table": item["table"],
+                        "column": item["column"],
+                        "score": 0
+                    }
+
+                scores[key]["score"] += 1
+
+        results = list(scores.values())
+
+        results.sort(
+            key=lambda x: x["score"],
+            reverse=True
+        )
+
+        return results
