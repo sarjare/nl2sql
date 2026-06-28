@@ -4,6 +4,7 @@ import re
 class QueryParser:
 
     def __init__(self, metadata):
+
         self.metadata = metadata
 
         self.aggregations = {
@@ -18,6 +19,17 @@ class QueryParser:
             "min": "MIN"
         }
 
+        self.operators = {
+            "greater": ">",
+            "more": ">",
+            "above": ">",
+            "less": "<",
+            "below": "<",
+            "under": "<",
+            "equal": "=",
+            "equals": "="
+        }
+
     def parse(self, question):
 
         question = question.lower()
@@ -28,60 +40,107 @@ class QueryParser:
             "tables": [],
             "columns": [],
             "aggregation": None,
-            "filters": []
+            "filters": [],
+            "group_by": [],
+            "order_by": None,
+            "limit": None
         }
 
-        # ------------------------
-        # Find Aggregation
-        # ------------------------
+        # -----------------------------
+        # Aggregation
+        # -----------------------------
 
         for word in words:
             if word in self.aggregations:
                 query["aggregation"] = self.aggregations[word]
                 break
 
-        # ------------------------
-        # Find Tables & Columns
-        # ------------------------
+        # -----------------------------
+        # Detect operator
+        # -----------------------------
 
-        best_score = 0
+        operator = None
 
-        best_table = None
+        for word in words:
+            if word in self.operators:
+                operator = self.operators[word]
+                break
 
-        best_column = None
+        # -----------------------------
+        # Detect numeric value
+        # -----------------------------
+
+        value = None
+
+        for word in words:
+            if word.isdigit():
+                value = int(word)
+                break
+
+        # -----------------------------
+        # Match columns using comments
+        # -----------------------------
+
+        matched_tables = set()
+        matched_columns = []
 
         for table in self.metadata:
-
-            table_score = 0
 
             for column in self.metadata[table]["columns"]:
 
                 comment = self.metadata[table]["columns"][column]["comment"]
 
-                if comment is None:
+                if not comment:
                     continue
 
-                keywords = comment.lower().split()
+                keywords = re.findall(r"\w+", comment.lower())
 
                 score = 0
 
                 for word in words:
-
                     if word in keywords:
                         score += 1
 
-                if score > best_score:
+                if score > 0:
 
-                    best_score = score
+                    matched_tables.add(table)
 
-                    best_table = table
+                    matched_columns.append({
+                        "table": table,
+                        "column": column,
+                        "score": score
+                    })
 
-                    best_column = column
+        matched_columns.sort(
+            key=lambda x: x["score"],
+            reverse=True
+        )
 
-        if best_table:
+        seen = set()
 
-            query["tables"].append(best_table)
+        for item in matched_columns:
 
-            query["columns"].append(best_column)
+            if item["column"] not in seen:
+
+                query["columns"].append(item["column"])
+                seen.add(item["column"])
+
+        query["tables"] = list(matched_tables)
+
+        # -----------------------------
+        # Create filter
+        # -----------------------------
+
+        if operator and value is not None and query["columns"]:
+
+            query["filters"].append({
+
+                "column": query["columns"][0],
+
+                "operator": operator,
+
+                "value": value
+
+            })
 
         return query
