@@ -13,72 +13,184 @@ class MetadataIndex:
         self.stop_words = {
             "the", "of", "for", "to", "a", "an",
             "is", "are", "per", "by", "in",
-            "on", "at", "and", "or", "show"
+            "on", "at", "and", "or",
+            "show", "get", "give", "display",
+            "find", "list", "all"
         }
 
-    # ----------------------------------------
-    # Build Index
-    # ----------------------------------------
+        # Simple synonym dictionary
+        self.synonyms = {
 
+            "shares": "share",
+            "security": "securities",
+            "portfolio": "portfolios",
+            "fund": "portfolio",
+            "value": "amount",
+            "qty": "quantity",
+            "transaction": "transactions"
+
+        }
+
+    # ====================================================
+    # BUILD INDEX
+    # ====================================================
     def build(self):
-
         for table in self.metadata:
 
-            # -------------------------
-            # Table Name
-            # -------------------------
+        # ======================================
+        # TABLE NAME
+        # ======================================
 
-            table_words = re.findall(r"\w+", table.lower())
+            table_words = self.tokenize(table)
 
-            for word in table_words:
+            table_keywords = self.create_phrases(table_words)
 
-                if word in self.stop_words:
-                    continue
+        for keyword in table_keywords:
 
-                self._add(word, table, None, "table")
+            self._add(
+                keyword=keyword,
+                table=table,
+                column=None,
+                source="table"
+            )
 
-            # -------------------------
-            # Columns
-            # -------------------------
+        # ======================================
+        # COLUMNS
+        # ======================================
 
-            for column in self.metadata[table]["columns"]:
+        for column, info in self.metadata[table]["columns"].items():
 
-                # Column Name
+            datatype = info["datatype"]
 
-                column_words = re.findall(r"\w+", column.lower())
+            nullable = info["nullable"]
 
-                for word in column_words:
+            comment = info["comment"] or ""
 
-                    if word in self.stop_words:
-                        continue
+            # ----------------------------------
+            # COLUMN NAME
+            # ----------------------------------
 
-                    self._add(word, table, column, "column")
+            column_words = self.tokenize(column)
 
-                # Column Comment
+            column_keywords = self.create_phrases(column_words)
 
-                comment = self.metadata[table]["columns"][column]["comment"]
+            for keyword in column_keywords:
 
-                if comment:
+                self._add(
+                    keyword=keyword,
+                    table=table,
+                    column=column,
+                    source="column",
+                    datatype=datatype,
+                    nullable=nullable,
+                    comment=comment
+                )
 
-                    comment_words = re.findall(
-                        r"\w+",
-                        comment.lower()
-                    )
+            # ----------------------------------
+            # COLUMN COMMENT
+            # ----------------------------------
 
-                    for word in comment_words:
+            comment_words = self.tokenize(comment)
 
-                        if word in self.stop_words:
-                            continue
+            comment_keywords = self.create_phrases(comment_words)
 
-                        self._add(word, table, column, "comment")
+            for keyword in comment_keywords:
+
+                self._add(
+                    keyword=keyword,
+                    table=table,
+                    column=column,
+                    source="comment",
+                    datatype=datatype,
+                    nullable=nullable,
+                    comment=comment
+                )
 
         return self.index
 
-    # ----------------------------------------
-    # Add keyword
-    # ----------------------------------------
+    # ====================================================
+    # NORMALIZE
+    # ====================================================
 
-    def _add(self, keyword, table, column, source):
+    def normalize(self, word):
+
+        word = word.lower()
+
+        if word in self.synonyms:
+            return self.synonyms[word]
+
+        return word
+    # ====================================================
+# TOKENIZE
+# ====================================================
+
+def tokenize(self, text):
+
+    words = re.findall(r"\w+", text.lower())
+
+    tokens = []
+
+    for word in words:
+
+        word = self.normalize(word)
+
+        if word in self.stop_words:
+            continue
+
+        tokens.append(word)
+
+    return tokens
+
+
+# ====================================================
+# CREATE PHRASES
+# ====================================================
+
+def create_phrases(self, words):
+
+    phrases = []
+
+    # Single words
+
+    phrases.extend(words)
+
+    # Two-word phrases
+
+    for i in range(len(words) - 1):
+
+        phrases.append(
+
+            words[i] + " " + words[i + 1]
+
+        )
+
+    # Three-word phrases
+
+    for i in range(len(words) - 2):
+
+        phrases.append(
+
+            words[i] + " " +
+            words[i + 1] + " " +
+            words[i + 2]
+
+        )
+
+    return phrases
+    # ====================================================
+    # ADD
+    # ====================================================
+
+    def _add(
+        self,
+        keyword,
+        table,
+        column,
+        source,
+        datatype=None,
+        nullable=None,
+        comment=""
+    ):
 
         self.index[keyword].append({
 
@@ -86,47 +198,117 @@ class MetadataIndex:
 
             "column": column,
 
-            "source": source
+            "source": source,
+
+            "datatype": datatype,
+
+            "nullable": nullable,
+
+            "comment": comment
 
         })
 
-    # ----------------------------------------
-    # Search
-    # ----------------------------------------
+    # ====================================================
+    # SEARCH
+    # ====================================================
+def search(self, question):
 
-    def search(self, question):
+    words = self.tokenize(question)
 
-        words = re.findall(r"\w+", question.lower())
+    keywords = self.create_phrases(words)
 
-        scores = {}
+    scores = {}
 
-        for word in words:
+    table_scores = {}
 
-            if word in self.stop_words:
-                continue
+    for word in keywords:
 
-            if word not in self.index:
-                continue
+        if word not in self.index:
+            continue
 
-            for item in self.index[word]:
+        for item in self.index[word]:
 
-                key = (item["table"], item["column"])
+            key = (
+                item["table"],
+                item["column"]
+            )
 
-                if key not in scores:
+            if key not in scores:
 
-                    scores[key] = {
-                        "table": item["table"],
-                        "column": item["column"],
-                        "score": 0
-                    }
+                scores[key] = {
 
-                scores[key]["score"] += 1
+                    "table": item["table"],
 
-        results = list(scores.values())
+                    "column": item["column"],
 
-        results.sort(
-            key=lambda x: x["score"],
-            reverse=True
-        )
+                    "datatype": item["datatype"],
 
-        return results
+                    "nullable": item["nullable"],
+
+                    "comment": item["comment"],
+
+                    "score": 0
+
+                }
+
+            points = 0
+
+            # Phrase matching
+            if " " in word:
+
+                points += 5
+
+            else:
+
+                points += 2
+
+            # Comment is stronger than column name
+            if item["source"] == "comment":
+
+                points += 3
+
+            elif item["source"] == "column":
+
+                points += 2
+
+            else:
+
+                points += 1
+
+            scores[key]["score"] += points
+
+            table = item["table"]
+
+            table_scores[table] = table_scores.get(table, 0) + points
+
+    if not table_scores:
+
+        return []
+
+    best_table = max(
+
+        table_scores,
+
+        key=table_scores.get
+
+    )
+
+    results = [
+
+        row
+
+        for row in scores.values()
+
+        if row["table"] == best_table
+
+    ]
+
+    results.sort(
+
+        key=lambda x: x["score"],
+
+        reverse=True
+
+    )
+
+    return results

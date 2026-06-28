@@ -17,6 +17,10 @@ index.build()
 
 while True:
 
-    question = input("Ask : ")
+    q = input("Search : ")
 
-    pprint(index.search(question))
+    result = index.search(q)
+
+    from pprint import pprint
+
+    pprint(result)

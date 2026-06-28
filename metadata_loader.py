@@ -89,10 +89,20 @@ class MetadataLoader:
             )
             keywords = comment.lower().split()
             metadata[table_name]["columns"][column_name] = {
-                "datatype": datatype,
-                "nullable": nullable,
-                "comment": comment,
-                "keywords": keywords
-            }
+
+            "datatype": datatype,
+
+            "nullable": nullable,
+
+            "comment": comment,
+
+            "is_date": datatype.upper() in (
+            "DATE",
+            "TIMESTAMP",
+            "TIMESTAMP(6)",
+            "TIMESTAMP WITH TIME ZONE"
+    )
+
+}
         print(metadata["TRANSMAIN_POC"]["columns"])
         return metadata

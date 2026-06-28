@@ -173,84 +173,84 @@ class QueryParser:
     # ===========================================================
     # SEARCH METADATA
     # ===========================================================
+    # ===========================================================
+# SEARCH METADATA
+# ===========================================================
 
-    def search_metadata(self, question):
+def search_metadata(self, question):
 
-        matches = self.metadata_index.search(question)
+    matches = self.metadata_index.search(question)
 
-        tables = []
+    tables = []
+    columns = []
 
-        columns = []
+    seen_tables = set()
+    seen_columns = set()
 
-        seen_tables = set()
+    for item in matches:
 
-        seen_columns = set()
+        # -----------------------------
+        # Tables
+        # -----------------------------
 
-        for item in matches:
+        if item["table"] not in seen_tables:
 
-            if item["table"] not in seen_tables:
+            tables.append(item["table"])
+            seen_tables.add(item["table"])
 
-                tables.append(item["table"])
+        # -----------------------------
+        # Columns
+        # -----------------------------
 
-                seen_tables.add(item["table"])
+        if item["column"]:
 
-            if item["column"]:
+            key = (item["table"], item["column"])
 
-                if item["column"] not in seen_columns:
+            if key not in seen_columns:
 
-                    columns.append(item["column"])
+                columns.append({
+                    "table": item["table"],
+                    "column": item["column"]
+                })
 
-                    seen_columns.add(item["column"])
+                seen_columns.add(key)
 
-        return tables, columns
-
+    return tables, columns
     # ===========================================================
     # BUILD FILTER
     # ===========================================================
+    # ===========================================================
+# BUILD FILTER
+# ===========================================================
 
-    def build_filter(self,
-                     columns,
-                     operator,
-                     value):
+def build_filter(self, columns, operator, value):
 
-        if not columns:
+    if not columns:
+        return []
 
-            return []
+    if operator is None:
+        return []
 
-        if operator is None:
+    if value is None:
+        return []
 
-            return []
-
-        if value is None:
-
-            return []
-
-        return [
-
-            {
-
-                "column": columns[0],
-
-                "operator": operator,
-
-                "value": value
-
-            }
-
-        ]
-        # ===========================================================
+    return [
+        {
+            "table": columns[0]["table"],
+            "column": columns[0]["column"],
+            "operator": operator,
+            "value": value
+        }
+    ]
+    #=========================================================
     # GROUP BY
     # ===========================================================
 
-    def find_group_by(self, question):
-
-        question = question.lower()
-
-        for word in self.group_keywords:
-
-            if word in question:
-
-                return True
+def find_group_by(self, question):
+    question = question.lower()
+    for word in self.group_keywords:
+        if word in question:
+            return True
 
         return False
 
@@ -258,7 +258,7 @@ class QueryParser:
     # DATE PLACEHOLDER
     # ===========================================================
 
-    def find_dates(self, question):
+def find_dates(self, question):
 
         """
         Temporary.
@@ -275,11 +275,9 @@ class QueryParser:
     # MAIN PARSER
     # ===========================================================
 
-    def parse(self, question):
-
-        query = {
-
-            "tables": [],
+def parse(self, question):
+    query = {
+        "tables": [],
 
             "columns": [],
 
@@ -299,47 +297,45 @@ class QueryParser:
         # Metadata Search
         # ----------------------------------
 
-        tables, columns = self.search_metadata(question)
-
-        query["tables"] = tables
-
-        query["columns"] = columns
+    tables, columns = self.search_metadata(question)
+    query["tables"] = tables
+    query["columns"] = columns
 
         # ----------------------------------
         # Aggregation
         # ----------------------------------
 
-        query["aggregation"] = self.find_aggregation(question)
+    query["aggregation"] = self.find_aggregation(question)
 
         # ----------------------------------
         # Limit
         # ----------------------------------
 
-        query["limit"] = self.find_limit(question)
+    query["limit"] = self.find_limit(question)
 
         # ----------------------------------
         # Order
         # ----------------------------------
 
-        query["order_by"] = self.find_order(question)
+    query["order_by"] = self.find_order(question)
 
         # ----------------------------------
         # Operator
         # ----------------------------------
 
-        operator = self.find_operator(question)
+    operator = self.find_operator(question)
 
         # ----------------------------------
         # Number
         # ----------------------------------
 
-        value = self.find_number(question)
+    value = self.find_number(question)
 
         # ----------------------------------
         # Filter
         # ----------------------------------
 
-        query["filters"] = self.build_filter(
+    query["filters"] = self.build_filter(
 
             columns,
 
@@ -353,20 +349,15 @@ class QueryParser:
         # Dates
         # ----------------------------------
 
-        date_filters = self.find_dates(question)
-
-        if date_filters:
-
-            query["filters"].extend(date_filters)
+    date_filters = self.find_dates(question)
+    if date_filters:
+        query["filters"].extend(date_filters)
 
         # ----------------------------------
         # Group By
         # ----------------------------------
 
-        if self.find_group_by(question):
-
-            if len(columns) > 1:
-
-                query["group_by"] = columns[1:]
-
+    if self.find_group_by(question):
+        if len(columns) > 1:
+                query["group_by"] = [c["column"]for c in columns[1:]]
         return query
