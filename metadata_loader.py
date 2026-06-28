@@ -87,11 +87,12 @@ class MetadataLoader:
                 (original_table, column_name),
                 ""
             )
-
+            keywords = comment.lower().split()
             metadata[table_name]["columns"][column_name] = {
                 "datatype": datatype,
                 "nullable": nullable,
-                "comment": comment
+                "comment": comment,
+                "keywords": keywords
             }
         print(metadata["TRANSMAIN_POC"]["columns"])
         return metadata
