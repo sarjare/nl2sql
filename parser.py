@@ -1,4 +1,5 @@
 import re
+from collections import defaultdict
 
 
 class QueryParser:
@@ -7,151 +8,365 @@ class QueryParser:
 
         self.metadata_index = metadata_index
 
+        # --------------------------
+        # SQL Functions
+        # --------------------------
+
         self.aggregations = {
+
             "sum": "SUM",
             "total": "SUM",
+
             "count": "COUNT",
+
             "average": "AVG",
             "avg": "AVG",
-            "maximum": "MAX",
+
             "minimum": "MIN",
-            "max": "MAX",
-            "min": "MIN"
+            "min": "MIN",
+
+            "maximum": "MAX",
+            "max": "MAX"
         }
 
-        self.operators = {
+        # --------------------------
+        # Comparison Operators
+        # --------------------------
+
+        self.operator_patterns = {
+
             "greater than": ">",
             "more than": ">",
             "above": ">",
+
             "less than": "<",
             "below": "<",
             "under": "<",
+
             "equal to": "=",
             "equals": "=",
-            "=": "=",
-            ">": ">",
-            "<": "<"
+            "equal": "="
         }
 
-        self.months = {
-            "january": 1,
-            "february": 2,
-            "march": 3,
-            "april": 4,
-            "may": 5,
-            "june": 6,
-            "july": 7,
-            "august": 8,
-            "september": 9,
-            "october": 10,
-            "november": 11,
-            "december": 12,
-            "jan": 1,
-            "feb": 2,
-            "mar": 3,
-            "apr": 4,
-            "jun": 6,
-            "jul": 7,
-            "aug": 8,
-            "sep": 9,
-            "oct": 10,
-            "nov": 11,
-            "dec": 12
+        # --------------------------
+        # Sorting
+        # --------------------------
+
+        self.sort_keywords = {
+
+            "highest": "DESC",
+            "largest": "DESC",
+            "biggest": "DESC",
+            "top": "DESC",
+
+            "lowest": "ASC",
+            "smallest": "ASC",
+            "bottom": "ASC"
         }
 
-    def parse(self, question):
+        self.group_keywords = {
+
+            "group",
+            "each",
+            "per"
+        }
+
+    # ===========================================================
+    # TOKENIZER
+    # ===========================================================
+
+    def tokenize(self, question):
+
+        return re.findall(r"\w+", question.lower())
+
+    # ===========================================================
+    # AGGREGATION
+    # ===========================================================
+
+    def find_aggregation(self, question):
 
         question = question.lower()
 
-        query = {
-            "tables": [],
-            "columns": [],
-            "aggregation": None,
-            "filters": [],
-            "group_by": [],
-            "order_by": None,
-            "limit": None
-        }
+        for key in self.aggregations:
 
-        # -------------------------
-        # Search metadata index
-        # -------------------------
+            if key in question:
+
+                return self.aggregations[key]
+
+        return None
+
+    # ===========================================================
+    # LIMIT
+    # ===========================================================
+
+    def find_limit(self, question):
+
+        question = question.lower()
+
+        m = re.search(r"top\s+(\d+)", question)
+
+        if m:
+
+            return int(m.group(1))
+
+        m = re.search(r"first\s+(\d+)", question)
+
+        if m:
+
+            return int(m.group(1))
+
+        return None
+
+    # ===========================================================
+    # ORDER BY
+    # ===========================================================
+
+    def find_order(self, question):
+
+        question = question.lower()
+
+        for key in self.sort_keywords:
+
+            if key in question:
+
+                return {
+
+                    "direction": self.sort_keywords[key]
+
+                }
+
+        return None
+
+    # ===========================================================
+    # OPERATOR
+    # ===========================================================
+
+    def find_operator(self, question):
+
+        question = question.lower()
+
+        for text in sorted(
+                self.operator_patterns.keys(),
+                key=len,
+                reverse=True):
+
+            if text in question:
+
+                return self.operator_patterns[text]
+
+        return None
+
+    # ===========================================================
+    # NUMBER
+    # ===========================================================
+
+    def find_number(self, question):
+
+        m = re.search(r"\d+", question)
+
+        if m:
+
+            return int(m.group())
+
+        return None
+
+    # ===========================================================
+    # SEARCH METADATA
+    # ===========================================================
+
+    def search_metadata(self, question):
 
         matches = self.metadata_index.search(question)
 
+        tables = []
+
+        columns = []
+
         seen_tables = set()
+
         seen_columns = set()
 
         for item in matches:
 
             if item["table"] not in seen_tables:
-                query["tables"].append(item["table"])
+
+                tables.append(item["table"])
+
                 seen_tables.add(item["table"])
 
-            if item["column"] and item["column"] not in seen_columns:
-                query["columns"].append(item["column"])
-                seen_columns.add(item["column"])
+            if item["column"]:
 
-        # -------------------------
-        # Aggregation
-        # -------------------------
+                if item["column"] not in seen_columns:
 
-        for word, sql in self.aggregations.items():
+                    columns.append(item["column"])
 
-            if word in question:
+                    seen_columns.add(item["column"])
 
-                query["aggregation"] = sql
-                break
+        return tables, columns
 
-        # -------------------------
-        # Top N
-        # -------------------------
+    # ===========================================================
+    # BUILD FILTER
+    # ===========================================================
 
-        top = re.search(r"top\s+(\d+)", question)
+    def build_filter(self,
+                     columns,
+                     operator,
+                     value):
 
-        if top:
+        if not columns:
 
-            query["limit"] = int(top.group(1))
+            return []
 
-            query["order_by"] = {
-                "direction": "DESC"
-            }
+        if operator is None:
 
-        # -------------------------
-        # Numbers
-        # -------------------------
+            return []
 
-        number = re.search(r"\d+", question)
+        if value is None:
 
-        value = None
+            return []
 
-        if number:
+        return [
 
-            value = int(number.group())
+            {
 
-        # -------------------------
-        # Operators
-        # -------------------------
-
-        operator = None
-
-        for text, symbol in self.operators.items():
-
-            if text in question:
-
-                operator = symbol
-                break
-
-        if operator and value and query["columns"]:
-
-            query["filters"].append({
-
-                "column": query["columns"][0],
+                "column": columns[0],
 
                 "operator": operator,
 
                 "value": value
 
-            })
+            }
+
+        ]
+        # ===========================================================
+    # GROUP BY
+    # ===========================================================
+
+    def find_group_by(self, question):
+
+        question = question.lower()
+
+        for word in self.group_keywords:
+
+            if word in question:
+
+                return True
+
+        return False
+
+    # ===========================================================
+    # DATE PLACEHOLDER
+    # ===========================================================
+
+    def find_dates(self, question):
+
+        """
+        Temporary.
+
+        Tomorrow this will call
+
+        date_parser.parse()
+
+        """
+
+        return []
+
+    # ===========================================================
+    # MAIN PARSER
+    # ===========================================================
+
+    def parse(self, question):
+
+        query = {
+
+            "tables": [],
+
+            "columns": [],
+
+            "aggregation": None,
+
+            "filters": [],
+
+            "group_by": [],
+
+            "order_by": None,
+
+            "limit": None
+
+        }
+
+        # ----------------------------------
+        # Metadata Search
+        # ----------------------------------
+
+        tables, columns = self.search_metadata(question)
+
+        query["tables"] = tables
+
+        query["columns"] = columns
+
+        # ----------------------------------
+        # Aggregation
+        # ----------------------------------
+
+        query["aggregation"] = self.find_aggregation(question)
+
+        # ----------------------------------
+        # Limit
+        # ----------------------------------
+
+        query["limit"] = self.find_limit(question)
+
+        # ----------------------------------
+        # Order
+        # ----------------------------------
+
+        query["order_by"] = self.find_order(question)
+
+        # ----------------------------------
+        # Operator
+        # ----------------------------------
+
+        operator = self.find_operator(question)
+
+        # ----------------------------------
+        # Number
+        # ----------------------------------
+
+        value = self.find_number(question)
+
+        # ----------------------------------
+        # Filter
+        # ----------------------------------
+
+        query["filters"] = self.build_filter(
+
+            columns,
+
+            operator,
+
+            value
+
+        )
+
+        # ----------------------------------
+        # Dates
+        # ----------------------------------
+
+        date_filters = self.find_dates(question)
+
+        if date_filters:
+
+            query["filters"].extend(date_filters)
+
+        # ----------------------------------
+        # Group By
+        # ----------------------------------
+
+        if self.find_group_by(question):
+
+            if len(columns) > 1:
+
+                query["group_by"] = columns[1:]
 
         return query
