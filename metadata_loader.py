@@ -48,14 +48,17 @@ class MetadataLoader:
             column_name,
             comments
         FROM all_col_comments
-        WHERE owner = :owner
+        WHERE owner = 'SCDAT'
+        AND table_name IN (
+        'TRANSMAIN',
+        'PORTFOLIOS',
+        'SECURITIES'
+        )
         """
 
-        comments = self.db.execute(
-            comment_query,
-            {"owner": DB_CONFIG["metadata_schema"]}
-        )
-
+        comments = self.db.execute(comment_query)
+        print("Comments:", len(comments))
+        print(comments[:5])
         # -----------------------------
         # STEP 3 : Create lookup dictionary
         # -----------------------------
@@ -90,5 +93,5 @@ class MetadataLoader:
                 "nullable": nullable,
                 "comment": comment
             }
-
+        print(metadata["TRANSMAIN_POC"]["columns"])
         return metadata
