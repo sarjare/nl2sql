@@ -1,13 +1,12 @@
 import re
 from collections import defaultdict
-
-
+from date_parser import DateParser
 class QueryParser:
 
     def __init__(self, metadata_index):
 
         self.metadata_index = metadata_index
-
+        self.date_parser = DateParser()
         # --------------------------
         # SQL Functions
         # --------------------------
@@ -219,29 +218,84 @@ def search_metadata(self, question):
     # ===========================================================
     # BUILD FILTER
     # ===========================================================
-    # ===========================================================
-# BUILD FILTER
-# ===========================================================
+def build_filter(self, columns, question):
+    if not columns:
+        return []
+    question = question.lower()
 
-def build_filter(self, columns, operator, value):
+    filters = []
+
+    patterns = [
+
+        (r"(greater than|more than|above)\s+(\d+)", ">"),
+
+        (r"(less than|below|under)\s+(\d+)", "<"),
+
+        (r"(equal to|equals|equal)\s+(\d+)", "=")
+
+    ]
+
+    for pattern, operator in patterns:
+
+        matches = re.findall(pattern, question)
+
+        for match in matches:
+
+            value = int(match[1])
+
+            filters.append({
+
+                "table": columns[0]["table"],
+
+                "column": columns[0]["column"],
+
+                "operator": operator,
+
+                "value": value
+
+            })
+
+    return filters
+def build_filter(self, columns, question):
 
     if not columns:
         return []
 
-    if operator is None:
-        return []
+    question = question.lower()
 
-    if value is None:
-        return []
+    filters = []
 
-    return [
-        {
-            "table": columns[0]["table"],
-            "column": columns[0]["column"],
-            "operator": operator,
-            "value": value
-        }
+    patterns = [
+
+        (r"(greater than|more than|above)\s+(\d+)", ">"),
+
+        (r"(less than|below|under)\s+(\d+)", "<"),
+
+        (r"(equal to|equals|equal)\s+(\d+)", "=")
+
     ]
+
+    for pattern, operator in patterns:
+
+        matches = re.findall(pattern, question)
+
+        for match in matches:
+
+            value = int(match[1])
+
+            filters.append({
+
+                "table": columns[0]["table"],
+
+                "column": columns[0]["column"],
+
+                "operator": operator,
+
+                "value": value
+
+            })
+
+    return filters
     #=========================================================
     # GROUP BY
     # ===========================================================
@@ -257,20 +311,15 @@ def find_group_by(self, question):
     # ===========================================================
     # DATE PLACEHOLDER
     # ===========================================================
-
 def find_dates(self, question):
 
-        """
-        Temporary.
+    date_filter = self.date_parser.parse(question)
 
-        Tomorrow this will call
+    if date_filter:
 
-        date_parser.parse()
+        return [date_filter]
 
-        """
-
-        return []
-
+    return []
     # ===========================================================
     # MAIN PARSER
     # ===========================================================
@@ -335,16 +384,13 @@ def parse(self, question):
         # Filter
         # ----------------------------------
 
-    query["filters"] = self.build_filter(
+    query["filters"].extend(self.build_filter(
 
             columns,
-
-            operator,
-
-            value
+            question
 
         )
-
+    )
         # ----------------------------------
         # Dates
         # ----------------------------------

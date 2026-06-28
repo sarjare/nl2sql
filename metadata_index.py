@@ -30,7 +30,25 @@ class MetadataIndex:
             "transaction": "transactions"
 
         }
+        # ===========================================
+# Ranking Weights
+# ===========================================
 
+    self.weights = {
+
+        "column_exact": 10,
+
+        "comment_exact": 8,
+
+        "column": 6,
+
+        "comment": 4,
+
+        "table": 2,
+
+        "synonym": 1
+
+    }
     # ====================================================
     # BUILD INDEX
     # ====================================================
@@ -113,12 +131,7 @@ class MetadataIndex:
     # ====================================================
 
     def normalize(self, word):
-
-        word = word.lower()
-
-        if word in self.synonyms:
-            return self.synonyms[word]
-
+        word = word.lower().strip()
         return word
     # ====================================================
 # TOKENIZE
@@ -213,25 +226,23 @@ def create_phrases(self, words):
     # ====================================================
 def search(self, question):
 
-    words = self.tokenize(question)
+    words = re.findall(r"\w+", question.lower())
 
-    keywords = self.create_phrases(words)
+    words = [self.normalize(word) for word in words]
 
     scores = {}
 
-    table_scores = {}
+    for word in words:
 
-    for word in keywords:
+        if word in self.stop_words:
+            continue
 
         if word not in self.index:
             continue
 
         for item in self.index[word]:
 
-            key = (
-                item["table"],
-                item["column"]
-            )
+            key = (item["table"], item["column"])
 
             if key not in scores:
 
@@ -251,57 +262,37 @@ def search(self, question):
 
                 }
 
-            points = 0
+            score = 0
 
-            # Phrase matching
-            if " " in word:
+            if item["source"] == "column":
 
-                points += 5
+                if item["column"] and item["column"].lower() == word:
 
-            else:
+                    score = self.weights["column_exact"]
 
-                points += 2
+                else:
 
-            # Comment is stronger than column name
-            if item["source"] == "comment":
+                    score = self.weights["column"]
 
-                points += 3
+            elif item["source"] == "comment":
 
-            elif item["source"] == "column":
+                comment = (item["comment"] or "").lower()
 
-                points += 2
+                if comment == word:
 
-            else:
+                    score = self.weights["comment_exact"]
 
-                points += 1
+                elif word in comment:
 
-            scores[key]["score"] += points
+                    score = self.weights["comment"]
 
-            table = item["table"]
+            elif item["source"] == "table":
 
-            table_scores[table] = table_scores.get(table, 0) + points
+                score = self.weights["table"]
 
-    if not table_scores:
+            scores[key]["score"] += score
 
-        return []
-
-    best_table = max(
-
-        table_scores,
-
-        key=table_scores.get
-
-    )
-
-    results = [
-
-        row
-
-        for row in scores.values()
-
-        if row["table"] == best_table
-
-    ]
+    results = list(scores.values())
 
     results.sort(
 
@@ -310,5 +301,16 @@ def search(self, question):
         reverse=True
 
     )
+    for item in results:
+        if item["score"] >= 20:
 
+            item["confidence"] = "HIGH"
+
+        elif item["score"] >= 10:
+
+            item["confidence"] = "MEDIUM"
+
+        else:
+
+            item["confidence"] = "LOW"
     return results

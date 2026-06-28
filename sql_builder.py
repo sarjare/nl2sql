@@ -188,18 +188,24 @@ class SQLBuilder:
             # Numeric Filter
             # -------------------------
 
-            if "value" in f:
-
-                column = self.qualify_column(
-                    f["column"],
-                    query["tables"]
-                )
+            if "value" in f and f.get("type") != "string":
+                column = self.qualify_column(f["column"],query["tables"] )
 
                 conditions.append(
 
                     f"{column} {f['operator']} {f['value']}"
 
                 )
+            elif f.get("type") == "string":
+                column = self.qualify_column(f["table"],f["column"]
+
+    )
+
+                conditions.append(
+
+                f"{column} = '{f['value']}'"
+
+    )
 
             # -------------------------
             # Date Filter
